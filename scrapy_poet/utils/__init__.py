@@ -23,7 +23,9 @@ from web_poet import (
 )
 
 try:
-    from scrapy.http.request import NO_CALLBACK  # available on Scrapy >= 2.8
+    from scrapy.http.request import (
+        NO_CALLBACK as NO_CALLBACK,  # available on Scrapy >= 2.8
+    )
 except ImportError:
     NO_CALLBACK = None  # type: ignore[assignment]
 
@@ -32,6 +34,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from scrapy.crawler import Crawler
+    from web_poet import RulesRegistry
     from web_poet.exceptions import Retry
 
 _P = ParamSpec("_P")
@@ -50,7 +53,7 @@ def get_scrapy_data_path(createdir: bool = True, default_dir: str = ".scrapy") -
     return path
 
 
-def http_request_to_scrapy_request(request: HttpRequest, **kwargs) -> Request:
+def http_request_to_scrapy_request(request: HttpRequest, **kwargs: Any) -> Request:
     return Request(
         url=str(request.url),
         method=request.method,
@@ -65,7 +68,7 @@ def scrapy_response_to_http_response(response: Response) -> HttpResponse:
     """Convenience method to convert a ``scrapy.http.Response`` into a
     ``web_poet.HttpResponse``.
     """
-    kwargs = {}
+    kwargs: dict[str, Any] = {}
     encoding = getattr(response, "_encoding", None)
     if encoding:
         kwargs["encoding"] = encoding
@@ -78,7 +81,7 @@ def scrapy_response_to_http_response(response: Response) -> HttpResponse:
     )
 
 
-def open_in_browser(response):
+def open_in_browser(response: HttpResponse) -> None:
     scrapy_open_in_browser(http_response_to_scrapy_response(response))
 
 
@@ -99,7 +102,9 @@ def http_response_to_scrapy_response(response: HttpResponse) -> HtmlResponse:
     )
 
 
-def create_registry_instance(cls: type, crawler: Crawler):
+def create_registry_instance(
+    cls: type[RulesRegistry], crawler: Crawler
+) -> RulesRegistry:
     for module in crawler.settings.getlist("SCRAPY_POET_DISCOVER", []):
         consume_modules(module)
     rules = crawler.settings.getlist("SCRAPY_POET_RULES", default_registry.get_rules())
@@ -113,7 +118,7 @@ def is_min_scrapy_version(version: str) -> bool:
 
 def maybeDeferred_coro(
     f: Callable[_P, Any], *args: _P.args, **kw: _P.kwargs
-) -> Deferred:
+) -> Deferred[Any]:
     """Copy of defer.maybeDeferred that also converts coroutines to Deferreds."""
     try:
         result = f(*args, **kw)

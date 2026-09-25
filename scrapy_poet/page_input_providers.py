@@ -9,11 +9,12 @@ different providers in order to acquire data from multiple external sources,
 for example, from scrapy-playwright or from scrapy-zyte-api.
 """
 
-from typing import Any, Callable, ClassVar, Set
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, List, Set
 
 from scrapy import Request
 from scrapy.crawler import Crawler
 from scrapy.http import Response
+from scrapy.statscollectors import StatsCollector
 from scrapy.utils.defer import maybe_deferred_to_future
 from web_poet import (
     HttpClient,
@@ -30,6 +31,9 @@ from web_poet.page_inputs.stats import StatCollector, StatNum
 
 from scrapy_poet.downloader import _create_scrapy_downloader
 from scrapy_poet.injection_errors import MalformedProvidedClassesError
+
+if TYPE_CHECKING:
+    from scrapy_poet.injection import Injector
 
 
 class PageObjectInputProvider:
@@ -94,10 +98,10 @@ class PageObjectInputProvider:
     given type, which must be callable, is provided by this provider.
     """
 
-    provided_classes: set[Callable] | Callable[[Callable], bool]
+    provided_classes: set[Any] | frozenset[Any] | Callable[[Any], bool]
     name: ClassVar[str] = ""  # It must be a unique name. Used by the cache mechanism
 
-    def is_provided(self, type_: Callable) -> bool:
+    def is_provided(self, type_: Any) -> bool:
         """
         Return ``True`` if the given type is provided by this provider based
         on the value of the attribute ``provided_classes``
@@ -111,8 +115,7 @@ class PageObjectInputProvider:
             f"{self!r}. Expected either 'set' or 'callable'"
         )
 
-    # FIXME: Can't import the Injector as class annotation due to circular dep.
-    def __init__(self, injector):
+    def __init__(self, injector: "Injector") -> None:
         """Initializes the provider. Invoked only at spider start up."""
         self.injector = injector
 
@@ -136,7 +139,9 @@ class HttpRequestProvider(PageObjectInputProvider):
     provided_classes = {HttpRequest}
     name = "request_data"
 
-    def __call__(self, to_provide: Set[Callable], request: Request):
+    def __call__(
+        self, to_provide: Set[Callable[..., Any]], request: Request
+    ) -> List[HttpRequest]:
         """Builds a :class:`web_poet.HttpRequest
         <web_poet.page_inputs.http.HttpRequest>` instance using a
         :class:`scrapy.http.Request` instance.
@@ -159,7 +164,9 @@ class HttpResponseProvider(PageObjectInputProvider):
     provided_classes = {HttpResponse}
     name = "response_data"
 
-    def __call__(self, to_provide: Set[Callable], response: Response):
+    def __call__(
+        self, to_provide: Set[Callable[..., Any]], response: Response
+    ) -> List[HttpResponse]:
         """Builds a :class:`web_poet.HttpResponse
         <web_poet.page_inputs.http.HttpResponse>` instance using a
         :class:`scrapy.http.Response` instance.
@@ -181,7 +188,9 @@ class HttpClientProvider(PageObjectInputProvider):
 
     provided_classes = {HttpClient}
 
-    def __call__(self, to_provide: Set[Callable], crawler: Crawler):
+    def __call__(
+        self, to_provide: Set[Callable[..., Any]], crawler: Crawler
+    ) -> List[HttpClient]:
         """Creates an :class:`web_poet.HttpClient
         <web_poet.page_inputs.client.HttpClient>` instance using Scrapy's
         downloader.
@@ -191,7 +200,7 @@ class HttpClientProvider(PageObjectInputProvider):
             download_func = crawler.engine.download_async
         else:
 
-            async def download_func(request: Request):
+            async def download_func(request: Request) -> Response:
                 assert crawler.engine
                 return await maybe_deferred_to_future(crawler.engine.download(request))
 
@@ -209,7 +218,9 @@ class PageParamsProvider(PageObjectInputProvider):
 
     provided_classes = {PageParams}
 
-    def __call__(self, to_provide: Set[Callable], request: Request):
+    def __call__(
+        self, to_provide: Set[Callable[..., Any]], request: Request
+    ) -> List[PageParams[Any, Any]]:
         """Creates a :class:`web_poet.PageParams
         <web_poet.page_inputs.page_params.PageParams>` instance based on the
         data found from the ``meta["page_params"]`` field of a
@@ -226,7 +237,9 @@ class RequestUrlProvider(PageObjectInputProvider):
     provided_classes = {RequestUrl}
     name = "request_url"
 
-    def __call__(self, to_provide: Set[Callable], request: Request):
+    def __call__(
+        self, to_provide: Set[Callable[..., Any]], request: Request
+    ) -> List[RequestUrl]:
         """Builds a :class:`web_poet.RequestUrl <web_poet.page_inputs.http.RequestUrl>`
         instance using :class:`scrapy.Request <scrapy.http.Request>` instance.
         """
@@ -237,7 +250,9 @@ class ResponseUrlProvider(PageObjectInputProvider):
     provided_classes = {ResponseUrl}
     name = "response_url"
 
-    def __call__(self, to_provide: Set[Callable], response: Response):
+    def __call__(
+        self, to_provide: Set[Callable[..., Any]], response: Response
+    ) -> List[ResponseUrl]:
         """Builds a :class:`web_poet.RequestUrl <web_poet.page_inputs.http.RequestUrl>`
         instance using a :class:`scrapy.http.Response` instance.
         """
@@ -245,7 +260,7 @@ class ResponseUrlProvider(PageObjectInputProvider):
 
 
 class ScrapyPoetStatCollector(StatCollector):
-    def __init__(self, stats):
+    def __init__(self, stats: StatsCollector) -> None:
         self._stats = stats
         self._prefix = "poet/stats/"
 
@@ -253,7 +268,7 @@ class ScrapyPoetStatCollector(StatCollector):
         self._stats.set_value(f"{self._prefix}{key}", value)
 
     def inc(self, key: str, value: StatNum = 1) -> None:
-        self._stats.inc_value(f"{self._prefix}{key}", value)
+        self._stats.inc_value(f"{self._prefix}{key}", value)  # type: ignore[arg-type]
 
 
 class StatsProvider(PageObjectInputProvider):
@@ -263,10 +278,13 @@ class StatsProvider(PageObjectInputProvider):
 
     provided_classes = {Stats}
 
-    def __call__(self, to_provide: Set[Callable], crawler: Crawler):
+    def __call__(
+        self, to_provide: Set[Callable[..., Any]], crawler: Crawler
+    ) -> List[Stats]:
         """Creates an :class:`web_poet.Stats
         <web_poet.page_inputs.client.Stats>` instance using Scrapy's
         stat collector.
         """
 
+        assert crawler.stats
         return [Stats(stat_collector=ScrapyPoetStatCollector(crawler.stats))]

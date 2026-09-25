@@ -1,8 +1,11 @@
+import argparse
 import datetime
 import logging
 import sys
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from types import MethodType
+from typing import Any
 
 import andi
 import scrapy
@@ -27,10 +30,10 @@ from scrapy_poet.injection import Injector
 logger = logging.getLogger(__name__)
 
 
-saved_dependencies = []
-saved_items = []
-saved_exceptions = []
-frozen_time = None
+saved_dependencies: list[Any] = []
+saved_items: list[Any] = []
+saved_exceptions: list[PageObjectAction] = []
+frozen_time: datetime.datetime | None = None
 
 
 class SavingInjector(Injector):
@@ -39,7 +42,7 @@ class SavingInjector(Injector):
         request: Request,
         response: Response,
         plan: andi.Plan,
-    ):
+    ) -> dict[Callable[..., Any], Any]:
         instances = await super().build_instances_from_providers(
             request, response, plan
         )
@@ -63,7 +66,7 @@ class SavingInjectionMiddleware(InjectionMiddleware):
 
 
 def spider_for(
-    injectable: type[ItemPage],
+    injectable: type[ItemPage[Any]],
     url: str,
     base_spider: type[scrapy.Spider] | None = None,
 ) -> type[scrapy.Spider]:
@@ -73,18 +76,24 @@ def spider_for(
     class InjectableSpider(base_spider):  # type: ignore[valid-type, misc]
         name = "injectable"
 
-        def __init__(self, name=None, **kwargs):
+        def __init__(self, name: str | None = None, **kwargs: Any) -> None:
             super().__init__(name, **kwargs)
             meta = {"savefixture": True}
-            self.start_requests = lambda: [scrapy.Request(url, self.cb, meta=meta)]
+            self.start_requests = lambda: [
+                scrapy.Request(url, self.cb, meta=meta)  # type: ignore[arg-type]
+            ]
 
-            async def start(self):
+            async def start(self: Any) -> AsyncIterator[Any]:
                 for item_or_request in self.start_requests():
                     yield item_or_request
 
             self.start = MethodType(start, self)
 
-        async def cb(self, response: DummyResponse, page: injectable):  # type: ignore[valid-type]
+        async def cb(
+            self,
+            response: DummyResponse,
+            page: injectable,  # type: ignore[valid-type]
+        ) -> AsyncIterator[Any]:
             global frozen_time  # noqa: PLW0603
             frozen_time = datetime.datetime.now(datetime.timezone.utc).replace(
                 microsecond=0
@@ -103,13 +112,13 @@ def spider_for(
 
 
 class SaveFixtureCommand(ScrapyCommand):
-    def syntax(self):
+    def syntax(self) -> str:
         return "<page object class> <URL> [<spider name>]"
 
-    def short_desc(self):
+    def short_desc(self) -> str:
         return "Generate a web-poet test for the provided page object and URL"
 
-    def run(self, args, opts):
+    def run(self, args: list[str], opts: argparse.Namespace) -> None:
         if len(args) < 2:
             raise UsageError
         type_name = args[0]
@@ -122,6 +131,9 @@ class SaveFixtureCommand(ScrapyCommand):
         cls = load_object(type_name)
         if not issubclass(cls, ItemPage):
             raise UsageError(f"Error: {type_name} is not a descendant of ItemPage")
+
+        assert self.settings is not None
+        assert self.crawler_process is not None
 
         self.settings["DOWNLOADER_MIDDLEWARES"]["scrapy_poet.InjectionMiddleware"] = (
             None
@@ -153,6 +165,7 @@ class SaveFixtureCommand(ScrapyCommand):
             self.exitcode = 1
             return
         deps = saved_dependencies
+        assert frozen_time is not None
         meta = {
             "frozen_time": frozen_time.isoformat(timespec="seconds"),
         }

@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from scrapy import Spider
     from scrapy.crawler import Crawler
     from scrapy.http import Request, Response
+    from typing_extensions import Self
 
 
 class RetryMiddleware:
@@ -19,7 +20,7 @@ class RetryMiddleware:
     crawler: Crawler | None
 
     @classmethod
-    def from_crawler(cls, crawler):
+    def from_crawler(cls, crawler: Crawler) -> Self:
         obj = cls()
         obj.crawler = crawler
         return obj

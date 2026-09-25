@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 from unittest import mock
 from unittest.mock import MagicMock
 
@@ -90,7 +91,9 @@ def test_get_scrapy_data_path(
         ),
     ],
 )
-def test_http_request_to_scrapy_request(http_request, kwargs, scrapy_request):
+def test_http_request_to_scrapy_request(
+    http_request: HttpRequest, kwargs: dict[str, Any], scrapy_request: Request
+) -> None:
     result = http_request_to_scrapy_request(http_request, **kwargs)
     assert result.url == scrapy_request.url
     assert result.method == scrapy_request.method
@@ -175,7 +178,9 @@ def test_http_request_to_scrapy_request(http_request, kwargs, scrapy_request):
         ),
     ],
 )
-def test_scrapy_response_to_http_response(scrapy_response, http_response):
+def test_scrapy_response_to_http_response(
+    scrapy_response: Response, http_response: HttpResponse
+) -> None:
     result = scrapy_response_to_http_response(scrapy_response)
     assert str(result.url) == str(http_response.url)
     assert result.body == http_response.body
@@ -252,7 +257,9 @@ def test_scrapy_response_to_http_response(scrapy_response, http_response):
         ),
     ],
 )
-def test_http_response_to_scrapy_response(scrapy_response, http_response):
+def test_http_response_to_scrapy_response(
+    scrapy_response: Response, http_response: HttpResponse
+) -> None:
     result = http_response_to_scrapy_response(http_response)
     assert str(result.url) == str(http_response.url)
     assert result.body == scrapy_response.body
@@ -262,7 +269,9 @@ def test_http_response_to_scrapy_response(scrapy_response, http_response):
 
 
 @mock.patch("scrapy_poet.utils.consume_modules")
-def test_create_registry_instance_SCRAPY_POET_DISCOVER(mock_consume_modules, settings):
+def test_create_registry_instance_SCRAPY_POET_DISCOVER(
+    mock_consume_modules: MagicMock, settings: dict[str, Any]
+) -> None:
     settings["SCRAPY_POET_RULES"] = []
 
     mock_cls = mock.Mock()
