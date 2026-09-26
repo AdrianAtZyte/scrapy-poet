@@ -256,7 +256,9 @@ def make_crawler(
         user_settings = settings
         settings = Settings(_get_test_settings())
         for k, v in dict(user_settings).items():
-            settings.set(k, v, priority=user_settings.getpriority(k) or "project")
+            priority = user_settings.getpriority(k)
+            assert priority is not None
+            settings.set(k, v, priority=priority)
 
     if not getattr(spider_cls, "name", None):
 

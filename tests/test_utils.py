@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 from scrapy import Spider
 from scrapy.http import Request, Response, TextResponse
+from scrapy.settings import Settings
 from scrapy.utils.test import get_crawler
 from web_poet import HttpRequest, HttpResponse
 
@@ -17,6 +18,7 @@ from scrapy_poet.utils import (
     http_response_to_scrapy_response,
     scrapy_response_to_http_response,
 )
+from scrapy_poet.utils.testing import CollectorPipeline, make_crawler
 
 
 @mock.patch("scrapy_poet.utils.Path", autospec=True)
@@ -286,3 +288,14 @@ def test_create_registry_instance_SCRAPY_POET_DISCOVER(
     create_registry_instance(mock_cls, fake_crawler)
     assert mock_consume_modules.call_args_list == [mock.call("a.b.c"), mock.call("x.y")]
     mock_cls.assert_called_once_with(rules=[])
+
+
+def test_make_crawler_settings_object() -> None:
+    class TestSpider(Spider):
+        name = "test"
+
+    settings = Settings({"FOO": "bar"}, priority="spider")
+    crawler = make_crawler(TestSpider, settings)
+    assert crawler.settings["FOO"] == "bar"
+    assert crawler.settings.getpriority("FOO") == settings.getpriority("FOO")
+    assert CollectorPipeline in crawler.settings["ITEM_PIPELINES"]

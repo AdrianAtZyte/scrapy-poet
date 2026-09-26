@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import socket
 import sys
 import time
@@ -50,7 +51,7 @@ class MockServer:
                 str(self.port),
             ],
             stdout=PIPE,
-            env={"PYTHONPATH": self.pythonpath},
+            env={**os.environ, "PYTHONPATH": self.pythonpath},
         )
         assert self.proc.stdout
         self.proc.stdout.readline()
@@ -63,7 +64,7 @@ class MockServer:
         traceback: TracebackType | None,
     ) -> None:
         assert self.proc
-        self.proc.kill()
+        self.proc.terminate()
         self.proc.wait()
         time.sleep(0.2)
 

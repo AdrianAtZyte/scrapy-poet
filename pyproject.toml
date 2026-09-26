@@ -78,6 +78,7 @@ filename = "scrapy_poet/VERSION"
 
 [tool.coverage.run]
 branch = true
+sigterm = true
 patch = [
     "subprocess",
 ]
