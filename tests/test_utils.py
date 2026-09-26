@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -7,6 +8,7 @@ import pytest
 from scrapy import Spider
 from scrapy.http import Request, Response, TextResponse
 from scrapy.settings import Settings
+from scrapy.utils.defer import deferred_f_from_coro_f, maybe_deferred_to_future
 from scrapy.utils.test import get_crawler
 from web_poet import HttpRequest, HttpResponse
 
@@ -18,7 +20,12 @@ from scrapy_poet.utils import (
     http_response_to_scrapy_response,
     scrapy_response_to_http_response,
 )
-from scrapy_poet.utils.testing import CollectorPipeline, make_crawler
+from scrapy_poet.utils.testing import (
+    CollectorPipeline,
+    ProductHtml,
+    crawl_single_item,
+    make_crawler,
+)
 
 
 @mock.patch("scrapy_poet.utils.Path", autospec=True)
@@ -299,3 +306,29 @@ def test_make_crawler_settings_object() -> None:
     assert crawler.settings["FOO"] == "bar"
     assert crawler.settings.getpriority("FOO") == settings.getpriority("FOO")
     assert CollectorPipeline in crawler.settings["ITEM_PIPELINES"]
+
+
+@deferred_f_from_coro_f
+async def test_crawl_single_item() -> None:
+    class ItemSpider(Spider):
+        name = "item"
+        url: str
+
+        def start_requests(self) -> Iterator[Request]:
+            yield Request(self.url)
+
+        async def start(self) -> AsyncIterator[Any]:
+            for request in self.start_requests():
+                yield request
+
+        def parse(self, response: Response) -> Iterator[dict[str, str]]:
+            yield {"url": response.url}
+
+    with (
+        pytest.warns(DeprecationWarning, match="crawl_items is deprecated"),
+        pytest.warns(DeprecationWarning, match="crawl_single_item is deprecated"),
+    ):
+        item, url, _ = await maybe_deferred_to_future(
+            crawl_single_item(ItemSpider, ProductHtml, {})
+        )
+    assert item == {"url": url}
